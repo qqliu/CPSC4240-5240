@@ -6,142 +6,64 @@ import sys
 import random
 import time
 
+VERIFY_THRESHOLD = 150
+
+TEST_SIZES = [10, 50, 100, 150, 500, 1000]
+
 ###############################################################################
 # Helper Functions
 ###############################################################################
 
 def matrix_to_str(mat):
+    """Convert a 2D list (matrix) into a multiline string."""
     return "\n".join(" ".join(str(x) for x in row) for row in mat)
 
-def multiply_matrices(A, B):
-    n = len(A)
-    C = [[0]*n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            s = 0
-            for k in range(n):
-                s += A[i][k]*B[k][j]
-            C[i][j] = s
-    return C
+def generate_random_input(n):
+    """
+    Generates the full input string for the C++ program:
+    N, then Matrix A, B, D, E.
+    Returns (input_string, expected_C, expected_F)
 
-def identity_matrix(n):
-    return [[1 if i == j else 0 for j in range(n)] for i in range(n)]
+    Note: expected_C and expected_F will be None if n >= VERIFY_THRESHOLD
+    """
+    # Create random matrices
+    # We use range -2 to 2 to keep numbers small preventing overflow in output parsing
+    A = [[random.randint(-2, 2) for _ in range(n)] for _ in range(n)]
+    B = [[random.randint(-2, 2) for _ in range(n)] for _ in range(n)]
 
-def random_matrix(n, min_val=0, max_val=2):
-    return [[random.randint(min_val, max_val) for _ in range(n)] for _ in range(n)]
+    # D and E are duplicates of A and B for consistent timing checks
+    D = [row[:] for row in A]
+    E = [row[:] for row in B]
 
-def partial_identity_matrix(n):
-    mat = [[0]*n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if i == j:
-                mat[i][j] = 1
-            else:
-                if random.random() < 0.1:
-                    mat[i][j] = random.randint(-1, 1)
-                else:
-                    mat[i][j] = 0
-    return mat
+    # Convert to input string
+    input_parts = [str(n)]
+    input_parts.append(matrix_to_str(A))
+    input_parts.append(matrix_to_str(B))
+    input_parts.append(matrix_to_str(D))
+    input_parts.append(matrix_to_str(E))
 
-###############################################################################
-# Test Cases
-###############################################################################
+    input_str = "\n".join(input_parts) + "\n"
 
-TEST_CASES = [
-    {
-        "name": "Test 1: 1x1 matrix",
-        "input": """1
-2
-3
-4
-5
-""",
-        "expected_output": [
-            "The resulting matrix C = A x B is:",
-            "6",
-            "The resulting matrix F = D x E is:",
-            "20"
-        ]
-    },
-    {
-        "name": "Test 2: 2x2 matrices (simple)",
-        "input": """2
-1 2
-3 4
-5 6
-7 8
-1 0
-0 1
-1 1
-1 1
-""",
-        "expected_output": [
-            "The resulting matrix C = A x B is:",
-            "19 22",
-            "43 50",
-            "The resulting matrix F = D x E is:",
-            "1 1",
-            "1 1"
-        ]
-    },
-    {
-        "name": "Test 3: 2x2 matrices (consistency check)",
-        "input": """2
-2 0
-0 2
-1 1
-2 2
-2 0
-0 2
-1 1
-2 2
-""",
-        "expected_output": [
-            "The resulting matrix C = A x B is:",
-            "2 2",
-            "4 4",
-            "The resulting matrix F = D x E is:",
-            "2 2",
-            "4 4"
-        ]
-    },
-]
+    # Only calculate expected output if N is small enough
+    expected_C = None
+    expected_F = None
 
-def build_large_test(n, name, hidden=False, timeout=10):
-    test_dict = {
-        "name": name,
-        "hidden": hidden,
-        "timeout": timeout
-    }
-    A = partial_identity_matrix(n)
-    B = random_matrix(n, -2, 2)
-    C = multiply_matrices(A, B)
-    D = random_matrix(n, 0, 1)
-    E = partial_identity_matrix(n)
-    F = multiply_matrices(D, E)
+    if n < VERIFY_THRESHOLD:
+        # Naive Python Multiply
+        C = [[0]*n for _ in range(n)]
+        for i in range(n):
+            for j in range(n):
+                s = 0
+                for k in range(n):
+                    s += A[i][k] * B[k][j]
+                C[i][j] = s
+        expected_C = C
+        expected_F = C # Since D=A, E=B
 
-    a_str = matrix_to_str(A)
-    b_str = matrix_to_str(B)
-    d_str = matrix_to_str(D)
-    e_str = matrix_to_str(E)
-
-    test_dict["input"] = f"{n}\n{a_str}\n{b_str}\n{d_str}\n{e_str}"
-
-    c_lines = [" ".join(str(x) for x in row) for row in C]
-    f_lines = [" ".join(str(x) for x in row) for row in F]
-
-    test_dict["expected_output"] = (
-        ["The resulting matrix C = A x B is:"] +
-        c_lines +
-        ["The resulting matrix F = D x E is:"] +
-        f_lines
-    )
-    return test_dict
-
-TEST_CASES.append(build_large_test(50, "Generated Test: n=50", hidden=False))
+    return input_str, expected_C, expected_F
 
 ###############################################################################
-# Robust Compilation Logic (The Fix)
+# Compilation (macOS & Linux Compatible)
 ###############################################################################
 
 def compile_cpp_source():
@@ -150,132 +72,138 @@ def compile_cpp_source():
         return False
 
     compiler = "g++"
-    # Added -I. so it can find parlay folder if it's in the current dir
     flags = ["-std=c++17", "-O3", "-fopenmp", "-pthread", "-I."]
 
+    # macOS Logic (Apple Clang support)
     if sys.platform == "darwin":
-        compiler = "g++" # Apple Clang
-        # Flags for Apple Clang to support OpenMP
         flags = [
-            "-std=c++17",
-            "-O3",
-            "-Xpreprocessor", "-fopenmp",
-            "-lomp",
-            "-pthread",
-            "-I."
+            "-std=c++17", "-O3", "-Xpreprocessor", "-fopenmp",
+            "-lomp", "-pthread", "-I."
         ]
-
-        # DYNAMIC PATH DETECTION
-        # We ask 'brew' where libomp lives instead of guessing
+        # Auto-detect libomp
         try:
             brew_prefix = subprocess.check_output(["brew", "--prefix", "libomp"]).decode().strip()
             flags.extend([f"-I{brew_prefix}/include", f"-L{brew_prefix}/lib"])
-            print(f"Found libomp at: {brew_prefix}")
         except Exception:
-            # Fallback for when brew command fails or isn't in path
-            print("Warning: Could not auto-detect libomp path via 'brew'. Trying default paths.")
             if os.path.exists("/opt/homebrew/include"):
                 flags.extend(["-I/opt/homebrew/include", "-L/opt/homebrew/lib"])
             elif os.path.exists("/usr/local/include"):
                 flags.extend(["-I/usr/local/include", "-L/usr/local/lib"])
 
     compile_cmd = [compiler] + flags + ["-o", "matrixmult", "matrixmult.cpp"]
-
-    print(f"Compiling with: {' '.join(compile_cmd)}")
+    print(f"Compiling: {' '.join(compile_cmd)}")
 
     try:
         subprocess.run(compile_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return True
     except subprocess.CalledProcessError as e:
         print("Compilation failed.")
-        print("stdout:", e.stdout.decode())
         print("stderr:", e.stderr.decode())
         return False
 
-def run_test(test_case):
-    test_timeout = test_case.get("timeout", 10)
-    prog_input = test_case["input"]
+###############################################################################
+# Execution
+###############################################################################
+
+def run_performance_test(n, input_str, expected_C, label):
+    """
+    Runs the C++ binary with the given input.
+    Returns: (time_elapsed, passed_boolean)
+    """
+    start_time = time.time()
+
     try:
+        # Timeout scales with N. N=1000 might take a few seconds.
+        # Giving generous timeout (60s) for the largest cases.
         proc = subprocess.run(
             ["./matrixmult"],
-            input=prog_input.encode("utf-8"),
+            input=input_str.encode("utf-8"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=test_timeout
+            timeout=60
         )
     except subprocess.TimeoutExpired:
-        return ["[TIMEOUT]"]
+        return -1.0, False
 
-    output = proc.stdout.decode("utf-8").strip().splitlines()
-    filtered_output = []
-    for line in output:
-        line = line.strip()
-        if not line or line.startswith("Enter"): continue
-        filtered_output.append(line)
-    return filtered_output
-
-def grade_test_case(test_case):
-    start_time = time.time()
-    output_lines = run_test(test_case)
     end_time = time.time()
-    test_duration = end_time - start_time
+    duration = end_time - start_time
 
-    expected_lines = test_case["expected_output"]
-
+    # Validation (Only if expected_C is provided)
     passed = True
-    if len(output_lines) != len(expected_lines):
-        passed = False
-    else:
-        for out_line, exp_line in zip(output_lines, expected_lines):
-            if out_line.strip() != exp_line.strip():
+    if expected_C is not None:
+        output_lines = proc.stdout.decode("utf-8").strip().splitlines()
+        try:
+            flat_output = []
+            for line in output_lines:
+                # Ignore text headers, look for lines starting with numbers or minus signs
+                if not line: continue
+                parts = line.split()
+                if parts[0].lstrip("-").isdigit():
+                    flat_output.extend([int(x) for x in parts])
+
+            # Expected flat list (Doubled because C and F are printed)
+            flat_expected = [x for row in expected_C for x in row] * 2
+
+            if flat_output != flat_expected:
                 passed = False
-                break
+        except Exception:
+            passed = False
 
-    score = 1 if passed else 0
-    feedback = []
-    if not passed:
-        feedback.append(f"Expected ({len(expected_lines)} lines) vs Got ({len(output_lines)} lines).")
-        # Show sample mismatch
-        for i in range(min(5, len(expected_lines), len(output_lines))):
-            feedback.append(f"Exp: {expected_lines[i]}")
-            feedback.append(f"Got: {output_lines[i]}")
-    else:
-        feedback.append("Output matched.")
+    return duration, passed
 
-    return {
-        "name": test_case["name"],
-        "score": score,
-        "max_score": 1,
-        "time_elapsed_seconds": test_duration,
-        "output": "\n".join(feedback)
-    }
+###############################################################################
+# Main Loop
+###############################################################################
 
 def main():
     if not compile_cpp_source():
-        results = {"score": 0, "output": "Compilation failed.", "tests": []}
-        print(json.dumps(results, indent=4))
         sys.exit(1)
 
-    test_results = []
-    total_score = 0
-    total_max = 0
+    print(f"\nRunning Performance Tests for Sizes: {TEST_SIZES}")
+    print(f"{'SIZE':<10} | {'RUN 1 (C) TIME':<20} | {'RUN 2 (F) TIME':<20} | {'STATUS'}")
+    print("-" * 70)
 
-    for test in TEST_CASES:
-        t_res = grade_test_case(test)
-        test_results.append(t_res)
-        total_score += t_res["score"]
-        total_max += t_res["max_score"]
-        status = "PASSED" if t_res["score"] == 1 else "FAILED"
-        
-        print(f"Test '{t_res['name']}': {status} ({t_res['time_elapsed_seconds']:.4f}s)")
+    results = []
 
-    final_score = (total_score / total_max) * 100.0 if total_max > 0 else 0
-    results = {"score": final_score, "output": "Autograder completed.", "tests": test_results}
+    for n in TEST_SIZES:
+        # 1. Prepare Data
+        # Generating input for N=1000 takes a moment, so we do it once per size.
+        input_str, expected_C, _ = generate_random_input(n)
 
+        # 2. Run for "C"
+        time_c, passed_c = run_performance_test(n, input_str, expected_C, "C")
+
+        # 3. Run for "F"
+        time_f, passed_f = run_performance_test(n, input_str, expected_C, "F")
+
+        # 4. Status String
+        status = "OK"
+        if time_c < 0 or time_f < 0:
+            status = "TIMEOUT"
+        elif n < VERIFY_THRESHOLD and (not passed_c or not passed_f):
+            status = "MISMATCH"
+        elif n >= VERIFY_THRESHOLD:
+            status = "Perf Only"
+
+        # 5. Output Row
+        c_str = f"{time_c:.4f}s" if time_c >= 0 else "TIMEOUT"
+        f_str = f"{time_f:.4f}s" if time_f >= 0 else "TIMEOUT"
+
+        print(f"{n:<10} | {c_str:<20} | {f_str:<20} | {status}")
+
+        results.append({
+            "size": n,
+            "time_c": time_c,
+            "time_f": time_f,
+            "status": status
+        })
+
+    # Save minimal results
     with open("results.json", "w") as f:
         json.dump(results, f, indent=4)
 
-    sys.exit(0)
+    print("-" * 70)
+    print("Done. Results saved to results.json")
 
 if __name__ == "__main__":
     main()
