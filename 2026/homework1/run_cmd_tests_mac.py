@@ -7,35 +7,27 @@ import random
 import time
 
 VERIFY_THRESHOLD = 150
-
 TEST_SIZES = [10, 50, 100, 150, 500, 1000]
+
+# Timeout for large tests (seconds)
+TIMEOUT_SEC = 60
 
 ###############################################################################
 # Helper Functions
 ###############################################################################
 
 def matrix_to_str(mat):
-    """Convert a 2D list (matrix) into a multiline string."""
     return "\n".join(" ".join(str(x) for x in row) for row in mat)
 
 def generate_random_input(n):
-    """
-    Generates the full input string for the C++ program:
-    N, then Matrix A, B, D, E.
-    Returns (input_string, expected_C, expected_F)
-
-    Note: expected_C and expected_F will be None if n >= VERIFY_THRESHOLD
-    """
     # Create random matrices
-    # We use range -2 to 2 to keep numbers small preventing overflow in output parsing
     A = [[random.randint(-2, 2) for _ in range(n)] for _ in range(n)]
     B = [[random.randint(-2, 2) for _ in range(n)] for _ in range(n)]
 
-    # D and E are duplicates of A and B for consistent timing checks
+    # D and E are duplicates of A and B
     D = [row[:] for row in A]
     E = [row[:] for row in B]
 
-    # Convert to input string
     input_parts = [str(n)]
     input_parts.append(matrix_to_str(A))
     input_parts.append(matrix_to_str(B))
@@ -44,12 +36,9 @@ def generate_random_input(n):
 
     input_str = "\n".join(input_parts) + "\n"
 
-    # Only calculate expected output if N is small enough
-    expected_C = None
-    expected_F = None
-
+    # Expected output for verification (only for small N)
+    expected_flat = None
     if n < VERIFY_THRESHOLD:
-        # Naive Python Multiply
         C = [[0]*n for _ in range(n)]
         for i in range(n):
             for j in range(n):
@@ -57,13 +46,13 @@ def generate_random_input(n):
                 for k in range(n):
                     s += A[i][k] * B[k][j]
                 C[i][j] = s
-        expected_C = C
-        expected_F = C # Since D=A, E=B
+        c_flat = [x for row in C for x in row]
+        expected_flat = c_flat + c_flat # For C and F
 
-    return input_str, expected_C, expected_F
+    return input_str, expected_flat
 
 ###############################################################################
-# Compilation (macOS & Linux Compatible)
+# macOS Robust Compilation Logic
 ###############################################################################
 
 def compile_cpp_source():
@@ -72,23 +61,41 @@ def compile_cpp_source():
         return False
 
     compiler = "g++"
+
+    # Default Flags (Linux/Standard)
     flags = ["-std=c++17", "-O3", "-fopenmp", "-pthread", "-I."]
 
-    # macOS Logic (Apple Clang support)
+    # macOS Specific Logic
     if sys.platform == "darwin":
+        print("Detected macOS. Configuring OpenMP flags...")
+        # Apple Clang requires -Xpreprocessor -fopenmp and linking libomp explicitly
         flags = [
-            "-std=c++17", "-O3", "-Xpreprocessor", "-fopenmp",
-            "-lomp", "-pthread", "-I."
+            "-std=c++17",
+            "-O3",
+            "-Xpreprocessor", "-fopenmp",
+            "-lomp",
+            "-pthread",
+            "-I."
         ]
-        # Auto-detect libomp
+
+        # 1. Try finding libomp via brew (Most robust method)
+        found_libomp = False
         try:
             brew_prefix = subprocess.check_output(["brew", "--prefix", "libomp"]).decode().strip()
             flags.extend([f"-I{brew_prefix}/include", f"-L{brew_prefix}/lib"])
+            print(f"  -> Found libomp via brew at: {brew_prefix}")
+            found_libomp = True
         except Exception:
-            if os.path.exists("/opt/homebrew/include"):
+            pass
+
+        # 2. Fallback paths if brew command failed
+        if not found_libomp:
+            if os.path.exists("/opt/homebrew/include"): # Apple Silicon default
                 flags.extend(["-I/opt/homebrew/include", "-L/opt/homebrew/lib"])
-            elif os.path.exists("/usr/local/include"):
+                print("  -> Using fallback path: /opt/homebrew")
+            elif os.path.exists("/usr/local/include"): # Intel Mac default
                 flags.extend(["-I/usr/local/include", "-L/usr/local/lib"])
+                print("  -> Using fallback path: /usr/local")
 
     compile_cmd = [compiler] + flags + ["-o", "matrixmult", "matrixmult.cpp"]
     print(f"Compiling: {' '.join(compile_cmd)}")
@@ -97,62 +104,74 @@ def compile_cpp_source():
         subprocess.run(compile_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return True
     except subprocess.CalledProcessError as e:
-        print("Compilation failed.")
+        print("\nCompilation failed!")
+        print("Ensure you have installed libomp: 'brew install libomp'")
         print("stderr:", e.stderr.decode())
         return False
 
 ###############################################################################
-# Execution
+# Execution Logic (Parses Separate Times)
 ###############################################################################
 
-def run_performance_test(n, input_str, expected_C, label):
+def run_test_and_parse(n, input_str, expected_flat):
     """
-    Runs the C++ binary with the given input.
-    Returns: (time_elapsed, passed_boolean)
+    Runs the C++ binary.
+    Returns: (time_c, time_f, status)
     """
-    start_time = time.time()
-
     try:
-        # Timeout scales with N. N=1000 might take a few seconds.
-        # Giving generous timeout (60s) for the largest cases.
         proc = subprocess.run(
             ["./matrixmult"],
             input=input_str.encode("utf-8"),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=60
+            timeout=TIMEOUT_SEC
         )
     except subprocess.TimeoutExpired:
-        return -1.0, False
+        return -1, -1, "TIMEOUT"
 
-    end_time = time.time()
-    duration = end_time - start_time
+    output_lines = proc.stdout.decode("utf-8").strip().splitlines()
 
-    # Validation (Only if expected_C is provided)
-    passed = True
-    if expected_C is not None:
-        output_lines = proc.stdout.decode("utf-8").strip().splitlines()
+    # 1. Verification (Check correctness of math)
+    if expected_flat is not None:
         try:
             flat_output = []
             for line in output_lines:
-                # Ignore text headers, look for lines starting with numbers or minus signs
+                line = line.strip()
                 if not line: continue
+                # Skip the TIME_ tags during matrix number parsing
+                if line.startswith("TIME_"): continue
+
                 parts = line.split()
-                if parts[0].lstrip("-").isdigit():
+                # If line starts with a number or minus sign, treat as matrix row
+                if len(parts) > 0 and parts[0].lstrip("-").isdigit():
                     flat_output.extend([int(x) for x in parts])
 
-            # Expected flat list (Doubled because C and F are printed)
-            flat_expected = [x for row in expected_C for x in row] * 2
-
-            if flat_output != flat_expected:
-                passed = False
+            if flat_output != expected_flat:
+                return -1, -1, "MISMATCH"
         except Exception:
-            passed = False
+            return -1, -1, "PARSE_ERR"
 
-    return duration, passed
+    # 2. Extract internal C++ times
+    time_c = -1.0
+    time_f = -1.0
+
+    for line in output_lines:
+        if line.startswith("TIME_C:"):
+            try:
+                time_c = float(line.split(":")[1])
+            except: pass
+        if line.startswith("TIME_F:"):
+            try:
+                time_f = float(line.split(":")[1])
+            except: pass
+
+    if time_c == -1.0 or time_f == -1.0:
+        return -1, -1, "NO_TIME_DATA"
+
+    return time_c, time_f, "OK"
 
 ###############################################################################
-# Main Loop
+# Main
 ###############################################################################
 
 def main():
@@ -160,49 +179,38 @@ def main():
         sys.exit(1)
 
     print(f"\nRunning Performance Tests for Sizes: {TEST_SIZES}")
-    print(f"{'SIZE':<10} | {'RUN 1 (C) TIME':<20} | {'RUN 2 (F) TIME':<20} | {'STATUS'}")
-    print("-" * 70)
+    print(f"{'SIZE':<10} | {'TIME C (sec)':<15} | {'TIME F (sec)':<15} | {'STATUS'}")
+    print("-" * 60)
 
     results = []
 
     for n in TEST_SIZES:
-        # 1. Prepare Data
-        # Generating input for N=1000 takes a moment, so we do it once per size.
-        input_str, expected_C, _ = generate_random_input(n)
+        # Generate Input
+        input_str, expected_flat = generate_random_input(n)
 
-        # 2. Run for "C"
-        time_c, passed_c = run_performance_test(n, input_str, expected_C, "C")
+        # Run once (C++ code calculates both C and F times internally)
+        t_c, t_f, status = run_test_and_parse(n, input_str, expected_flat)
 
-        # 3. Run for "F"
-        time_f, passed_f = run_performance_test(n, input_str, expected_C, "F")
-
-        # 4. Status String
-        status = "OK"
-        if time_c < 0 or time_f < 0:
-            status = "TIMEOUT"
-        elif n < VERIFY_THRESHOLD and (not passed_c or not passed_f):
-            status = "MISMATCH"
-        elif n >= VERIFY_THRESHOLD:
+        if n >= VERIFY_THRESHOLD and status == "OK":
             status = "Perf Only"
 
-        # 5. Output Row
-        c_str = f"{time_c:.4f}s" if time_c >= 0 else "TIMEOUT"
-        f_str = f"{time_f:.4f}s" if time_f >= 0 else "TIMEOUT"
+        # Format output
+        sc = f"{t_c:.6f}" if t_c >= 0 else "N/A"
+        sf = f"{t_f:.6f}" if t_f >= 0 else "N/A"
 
-        print(f"{n:<10} | {c_str:<20} | {f_str:<20} | {status}")
+        print(f"{n:<10} | {sc:<15} | {sf:<15} | {status}")
 
         results.append({
             "size": n,
-            "time_c": time_c,
-            "time_f": time_f,
+            "time_c": t_c,
+            "time_f": t_f,
             "status": status
         })
 
-    # Save minimal results
     with open("results.json", "w") as f:
         json.dump(results, f, indent=4)
 
-    print("-" * 70)
+    print("-" * 60)
     print("Done. Results saved to results.json")
 
 if __name__ == "__main__":

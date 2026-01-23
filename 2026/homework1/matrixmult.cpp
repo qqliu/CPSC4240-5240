@@ -6,13 +6,15 @@
 
 #include <iostream>
 #include <vector>
-
+#include <chrono>
 #include <omp.h>
 
 #include "parlaylib/include/parlay/primitives.h"
 #include "parlaylib/include/parlay/parallel.h"
 #include "parlaylib/include/parlay/sequence.h"
 #include "parlaylib/include/parlay/utilities.h"
+
+using namespace std;
 
 int main() {
     int n;
@@ -54,8 +56,11 @@ int main() {
         }
     }
 
+    auto startC = chrono::high_resolution_clock::now();
     // TODO (OpenMP): perform matrix multiplication A x B and write into C: C = A x B
     // YOUR OpenMP CODE HERE
+    auto endC = chrono::high_resolution_clock::now();
+    chrono::duration<double> elapsedC = endC - startC;
 
     std::cout << "The resulting matrix C = A x B is:\n";
     for (int i = 0; i < n; ++i) {
@@ -65,8 +70,11 @@ int main() {
         std::cout << "\n";
     }
 
+    auto startF = chrono::high_resolution_clock::now();
     // TODO (ParlayLib): perform matrix multiplication D x E and write into F: F = D x E
     // YOUR ParlayLib CODE HERE
+    auto endF = chrono::high_resolution_clock::now();
+    chrono::duration<double> elapsedF = endF - startF;
 
     std::cout << "The resulting matrix F = D x E is:\n";
     for (int i = 0; i < n; ++i) {
@@ -75,6 +83,9 @@ int main() {
         }
         std::cout << "\n";
     }
+
+    cout << "TIME_C:" << elapsedC.count() << endl;
+    cout << "TIME_F:" << elapsedF.count() << endl;
 
     return 0;
 }
