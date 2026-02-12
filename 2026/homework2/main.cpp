@@ -142,49 +142,52 @@ void mergesort_4way(int* arr, int n) {
 }
 
 // ============================================================
-// TESTING CODE
+// COMMAND-LINE AND GRADESCOPE TESTS (DO NOT MODIFY)
 // ============================================================
+int main(int argc, char* argv[]) {
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " <N> <num_threads> <seed>\n";
+        return 1;
+    }
 
-int main() {
-    const int N = 50000000;
-    std::cout << "Initializing " << N << " integers..." << std::endl;
+    int N = std::stoi(argv[1]);
+    int num_threads = std::stoi(argv[2]);
+    unsigned int seed = std::stoul(argv[3]);
 
     std::vector<int> data(N);
-    std::vector<int> check(N);
-
-    #pragma omp parallel
-    {
-        unsigned int seed = 42 + omp_get_thread_num();
-        #pragma omp for
-        for (int i = 0; i < N; ++i) data[i] = rand_r(&seed);
+    std::mt19937 rng(seed);
+    for (int i = 0; i < N; ++i) {
+        data[i] = rng();
     }
-    check = data;
 
-    std::cout << "Sorting (std::sort)..." << std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
-    std::sort(check.begin(), check.end());
-    auto end = std::chrono::high_resolution_clock::now();
-    double seq_time = std::chrono::duration<double>(end - start).count();
-    std::cout << "Sequential Time: " << seq_time << "s" << std::endl;
+    std::vector<int> check = data;
 
-    std::cout << "Sorting (4-Way Parallel)..." << std::endl;
+    omp_set_num_threads(num_threads);
     omp_set_nested(1);
     omp_set_dynamic(0);
 
-    start = std::chrono::high_resolution_clock::now();
+    double start_time = omp_get_wtime();
+
     #pragma omp parallel
     {
         #pragma omp single
-        mergesort_4way(data.data(), N);
+        {
+            mergesort_4way(data.data(), N);
+        }
     }
-    end = std::chrono::high_resolution_clock::now();
-    double par_time = std::chrono::duration<double>(end - start).count();
 
-    std::cout << "Parallel Time:   " << par_time << "s" << std::endl;
-    std::cout << "Speedup:         " << seq_time / par_time << "x" << std::endl;
+    double end_time = omp_get_wtime();
+    double elapsed = end_time - start_time;
 
-    if (data == check) std::cout << "PASSED." << std::endl;
-    else std::cout << "FAILED." << std::endl;
+    std::sort(check.begin(), check.end());
+    bool passed = (data == check);
 
-    return 0;
+    // Output formatted string for Python tester
+    if (passed) {
+        std::cout << "RESULT:PASS," << elapsed << "\n";
+        return 0;
+    } else {
+        std::cout << "RESULT:FAIL," << elapsed << "\n";
+        return 1;
+    }
 }
