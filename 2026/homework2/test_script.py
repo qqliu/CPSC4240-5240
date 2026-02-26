@@ -11,6 +11,8 @@ TEST_CASES = [
     {"name": "Large (10M) - Parallel","N": 10000000,   "threads": 8, "seed": 777},
 ]
 
+NUM_ATTEMPTS=5
+
 def compile_code(cpp_file, exec_file):
     print(f"[*] Compiling {cpp_file}...")
     compile_cmd = ["g++", "-O3", "-std=c++17", "-fopenmp", "-pthread", cpp_file, "-o", exec_file]
@@ -60,10 +62,18 @@ def main():
     results_map = {}
 
     for test in TEST_CASES:
-        status, time_sec = run_test(exec_file, test)
+        overall_status, total_time = "PASS", 0.0
+        for iteration in range(NUM_ATTEMPTS):
+            status, time_sec = run_test(exec_file, test)
+            if status != "PASS":
+                overall_status = status
+                break
+            total_time += time_sec
 
+        time_sec = total_time/NUM_ATTEMPTS
         status_str = f"\033[92m{status}\033[0m" if status == "PASS" else f"\033[91m{status}\033[0m"
         print(f"{test['name']:<25} | {test['N']:<10} | {test['threads']:<7} | {status_str:<15} | {time_sec:.4f}s")
+
 
         key = f"{test['N']}_{test['seed']}"
         if key not in results_map:
