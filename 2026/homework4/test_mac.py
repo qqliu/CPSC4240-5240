@@ -92,6 +92,10 @@ def generate_star_graph(n):
     pairs = [(0, i) for i in range(1, n)]
     return n, make_undirected(pairs)
 
+def generate_path_graph(n):
+    pairs = [(i, i + 1) for i in range(n - 1)]
+    return n, make_undirected(pairs)
+
 
 def generate_mixed_coreness_graph():
     pairs = [
@@ -165,71 +169,60 @@ def generate_random_graph(n, m, seed=42):
 # CSR Test Cases
 ###############################################################################
 
-CSR_TEST_CASES = []
+def get_test_cases(prefix):
+    tests = []
+    
+    n, e = 4, make_undirected([(0, 1), (1, 2), (2, 0), (0, 3)])
+    tests.append({"name": f"{prefix} Test 1: Triangle + Pendant (4V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = 2, make_undirected([(0, 1)])
+    tests.append({"name": f"{prefix} Test 2: Single Edge (2V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_star_graph(6)
+    tests.append({"name": f"{prefix} Test 3: Star Graph (6V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_path_graph(8)
+    tests.append({"name": f"{prefix} Test 4: Path Graph (8V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_complete_graph(5)
+    tests.append({"name": f"{prefix} Test 5: Complete K5 (5V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_mixed_coreness_graph()
+    tests.append({"name": f"{prefix} Test 6: Mixed Coreness K4+Tri+Pendant (7V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_grid_graph(4, 4)
+    tests.append({"name": f"{prefix} Test 7: 4x4 Grid (16V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_disjoint_cliques([10, 8, 5, 3])
+    tests.append({"name": f"{prefix} Test 8: Disjoint Cliques (26V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_nested_clique_chain()
+    tests.append({"name": f"{prefix} Test 9: Nested Clique Chain K8-K5-K3 (16V)", "nv": n, "edges": e, "timeout": 30})
+    
+    n, e = generate_random_graph(200, 1000, seed=555)
+    tests.append({"name": f"{prefix} Test 10: Random Graph (200V, ~2000E)", "nv": n, "edges": e, "timeout": 60})
+    
+    n, e = generate_random_graph(500, 2000, seed=444)
+    tests.append({"name": f"{prefix} Test 11: Random Graph (500V, ~4000E)", "nv": n, "edges": e, "timeout": 60})
+    
+    n, e = generate_random_graph(1000, 5000, seed=666)
+    tests.append({"name": f"{prefix} Test 12: Random Graph (1000V, ~10000E)", "nv": n, "edges": e, "timeout": 120})
+    
+    n, e = generate_random_graph(5000, 25000, seed=777)
+    tests.append({"name": f"{prefix} Test 13: Random Graph (5000V, ~50000E)", "nv": n, "edges": e, "timeout": 180})
+    
+    n, e = generate_random_graph(10000, 50000, seed=404)
+    tests.append({"name": f"{prefix} Test 14: Large Random Graph (10000V, ~100000E)", "nv": n, "edges": e, "timeout": 300})
+    
+    return tests
 
-n, e = 4, make_undirected([(0, 1), (1, 2), (2, 0), (0, 3)])
-CSR_TEST_CASES.append({"name": "CSR Test 1: Triangle + Pendant (4V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_mixed_coreness_graph()
-CSR_TEST_CASES.append({"name": "CSR Test 2: Mixed Coreness (7V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_complete_graph(5)
-CSR_TEST_CASES.append({"name": "CSR Test 3: Complete K5 (5V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_star_graph(6)
-CSR_TEST_CASES.append({"name": "CSR Test 4: Star (6V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_grid_graph(3, 3)
-CSR_TEST_CASES.append({"name": "CSR Test 5: 3x3 Grid (9V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_nested_clique_chain()
-CSR_TEST_CASES.append({"name": "CSR Test 6: Nested Clique Chain (16V)", "nv": n, "edges": e, "timeout": 10})
-
-n, e = generate_disjoint_cliques([50, 30, 20, 15, 10, 8, 7, 5, 3, 2])
-CSR_TEST_CASES.append({"name": "CSR Test 7: Disjoint Cliques (150V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_random_graph(200, 1000, seed=101)
-CSR_TEST_CASES.append({"name": "CSR Test 8: Random Graph (200V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_random_graph(1000, 5000, seed=202)
-CSR_TEST_CASES.append({"name": "CSR Test 9: Random Graph (1000V)", "nv": n, "edges": e, "timeout": 60})
-
-n, e = generate_random_graph(5000, 25000, seed=303)
-CSR_TEST_CASES.append({"name": "CSR Test 10: Random Graph (5000V)", "nv": n, "edges": e, "timeout": 120})
-
-n, e = generate_random_graph(10000, 50000, seed=404)
-CSR_TEST_CASES.append({"name": "CSR Test 11: Large Random Graph (10000V)", "nv": n, "edges": e, "timeout": 180})
-
+CSR_TEST_CASES = get_test_cases("CSR")
 
 ###############################################################################
 # Full Pipeline Test Cases (used only if nvcc is available)
 ###############################################################################
 
-PIPELINE_TEST_CASES = []
-
-n, e = 4, make_undirected([(0, 1), (1, 2), (2, 0), (0, 3)])
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 1: Triangle + Pendant (4V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_mixed_coreness_graph()
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 2: Mixed Coreness (7V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_complete_graph(5)
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 3: Complete K5 (5V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_grid_graph(3, 3)
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 4: 3x3 Grid (9V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_nested_clique_chain()
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 5: Nested Clique Chain (16V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_random_graph(1000, 5000, seed=202)
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 6: Random Graph (1000V)", "nv": n, "edges": e, "timeout": 120})
-
-n, e = generate_random_graph(5000, 25000, seed=303)
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 7: Random Graph (5000V)", "nv": n, "edges": e, "timeout": 180})
-
-n, e = generate_random_graph(10000, 50000, seed=404)
-PIPELINE_TEST_CASES.append({"name": "Pipeline Test 8: Large Random Graph (10000V)", "nv": n, "edges": e, "timeout": 300})
+PIPELINE_TEST_CASES = get_test_cases("Pipeline")
 
 
 ###############################################################################

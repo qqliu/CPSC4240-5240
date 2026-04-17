@@ -81,6 +81,9 @@ def generate_star_graph(n):
     pairs = [(0, i) for i in range(1, n)]
     return n, make_undirected(pairs)
 
+def generate_path_graph(n):
+    pairs = [(i, i + 1) for i in range(n - 1)]
+    return n, make_undirected(pairs)
 
 def generate_mixed_coreness_graph():
     """K4 (0-3) + triangle (3,4,5) + pendant (5,6). Expected: [3,3,3,3,2,2,1]"""
@@ -158,47 +161,47 @@ def generate_random_graph(n, m, seed=42):
 
 TEST_CASES = []
 
-# --- Small tests ---
 n, e = 4, make_undirected([(0, 1), (1, 2), (2, 0), (0, 3)])
 TEST_CASES.append({"name": "Test 1: Triangle + Pendant (4V)", "nv": n, "edges": e, "timeout": 30})
 
-n, e = generate_mixed_coreness_graph()
-TEST_CASES.append({"name": "Test 2: Mixed Coreness K4+Tri+Pendant (7V)", "nv": n, "edges": e, "timeout": 30})
-
-n, e = generate_complete_graph(5)
-TEST_CASES.append({"name": "Test 3: Complete K5 (5V)", "nv": n, "edges": e, "timeout": 30})
+n, e = 2, make_undirected([(0, 1)])
+TEST_CASES.append({"name": "Test 2: Single Edge (2V)", "nv": n, "edges": e, "timeout": 30})
 
 n, e = generate_star_graph(6)
-TEST_CASES.append({"name": "Test 4: Star Graph (6V)", "nv": n, "edges": e, "timeout": 30})
+TEST_CASES.append({"name": "Test 3: Star Graph (6V)", "nv": n, "edges": e, "timeout": 30})
 
-n, e = generate_grid_graph(3, 3)
-TEST_CASES.append({"name": "Test 5: 3x3 Grid (9V)", "nv": n, "edges": e, "timeout": 30})
+n, e = generate_path_graph(8)
+TEST_CASES.append({"name": "Test 4: Path Graph (8V)", "nv": n, "edges": e, "timeout": 30})
+
+n, e = generate_complete_graph(5)
+TEST_CASES.append({"name": "Test 5: Complete K5 (5V)", "nv": n, "edges": e, "timeout": 30})
+
+n, e = generate_mixed_coreness_graph()
+TEST_CASES.append({"name": "Test 6: Mixed Coreness K4+Tri+Pendant (7V)", "nv": n, "edges": e, "timeout": 30})
+
+n, e = generate_grid_graph(4, 4)
+TEST_CASES.append({"name": "Test 7: 4x4 Grid (16V)", "nv": n, "edges": e, "timeout": 30})
+
+n, e = generate_disjoint_cliques([10, 8, 5, 3])
+TEST_CASES.append({"name": "Test 8: Disjoint Cliques (26V)", "nv": n, "edges": e, "timeout": 30})
 
 n, e = generate_nested_clique_chain()
-TEST_CASES.append({"name": "Test 6: Nested Clique Chain K8-K5-K3 (16V)", "nv": n, "edges": e, "timeout": 30})
+TEST_CASES.append({"name": "Test 9: Nested Clique Chain K8-K5-K3 (16V)", "nv": n, "edges": e, "timeout": 30})
 
-# --- Medium tests ---
-n, e = generate_disjoint_cliques([50, 30, 20, 15, 10, 8, 7, 5, 3, 2])
-TEST_CASES.append({"name": "Test 7: Disjoint Cliques (150V)", "nv": n, "edges": e, "timeout": 60})
+n, e = generate_random_graph(200, 1000, seed=555)
+TEST_CASES.append({"name": "Test 10: Random Graph (200V, ~2000E)", "nv": n, "edges": e, "timeout": 60})
 
-n, e = generate_random_graph(200, 1000, seed=101)
-TEST_CASES.append({"name": "Test 8: Random Graph (200V, ~2000E)", "nv": n, "edges": e, "timeout": 60})
+n, e = generate_random_graph(500, 2000, seed=444)
+TEST_CASES.append({"name": "Test 11: Random Graph (500V, ~4000E)", "nv": n, "edges": e, "timeout": 60})
 
-n, e = generate_grid_graph(10, 10)
-TEST_CASES.append({"name": "Test 9: 10x10 Grid (100V)", "nv": n, "edges": e, "timeout": 60})
+n, e = generate_random_graph(1000, 5000, seed=666)
+TEST_CASES.append({"name": "Test 12: Random Graph (1000V, ~10000E)", "nv": n, "edges": e, "timeout": 120})
 
-# --- Large tests ---
-n, e = generate_random_graph(1000, 5000, seed=202)
-TEST_CASES.append({"name": "Test 10: Random Graph (1000V, ~10000E)", "nv": n, "edges": e, "timeout": 120})
-
-n, e = generate_random_graph(5000, 25000, seed=303)
-TEST_CASES.append({"name": "Test 11: Random Graph (5000V, ~50000E)", "nv": n, "edges": e, "timeout": 180})
-
-n, e = generate_disjoint_cliques([100, 80, 60, 40, 30, 20, 15, 10, 5])
-TEST_CASES.append({"name": "Test 12: Large Disjoint Cliques (360V)", "nv": n, "edges": e, "timeout": 120})
+n, e = generate_random_graph(5000, 25000, seed=777)
+TEST_CASES.append({"name": "Test 13: Random Graph (5000V, ~50000E)", "nv": n, "edges": e, "timeout": 180})
 
 n, e = generate_random_graph(10000, 50000, seed=404)
-TEST_CASES.append({"name": "Test 13: Large Random Graph (10000V, ~100000E)", "nv": n, "edges": e, "timeout": 300})
+TEST_CASES.append({"name": "Test 14: Large Random Graph (10000V, ~100000E)", "nv": n, "edges": e, "timeout": 300})
 
 
 ###############################################################################
