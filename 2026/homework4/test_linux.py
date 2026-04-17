@@ -223,12 +223,12 @@ def main():
     # 2. Compile test pipeline (independent of student Makefile)
     print("\n2. Compiling the test pipeline...")
     # Clean any stale objects
-    for f in ["autograder_main.o", "kcore_cpu.o", "kcore_gpu.o", "test_pipeline"]:
+    for f in ["main.o", "kcore_cpu.o", "kcore_gpu.o", "test_pipeline"]:
         if os.path.exists(f):
             os.remove(f)
     try:
         subprocess.run(
-            ["g++", "-O3", "-std=c++17", "-Wall", "-pthread", "-c", "autograder_main.cpp", "-o", "autograder_main.o"],
+            ["g++", "-O3", "-std=c++17", "-Wall", "-pthread", "-c", "main.cpp", "-o", "main.o"],
             check=True, capture_output=True, text=True,
         )
         subprocess.run(
@@ -241,7 +241,7 @@ def main():
         )
         subprocess.run(
             ["nvcc", "-O3", "-std=c++17", "-arch=native", "-Xcompiler", "-pthread",
-             "-o", "test_pipeline", "autograder_main.o", "kcore_cpu.o", "kcore_gpu.o"],
+             "-o", "test_pipeline", "main.o", "kcore_cpu.o", "kcore_gpu.o"],
             check=True, capture_output=True, text=True,
         )
         print("   Compilation successful.")
